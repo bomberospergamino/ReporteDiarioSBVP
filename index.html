@@ -19,7 +19,7 @@
         <div>
           <p class="eyebrow">Registro diario de cumplimiento</p>
           <h1>Reporte de guardia</h1>
-          <p class="hero-subtitle">Versión móvil para registro rápido y generación de PDF institucional.</p>
+          <p class="hero-subtitle">Diseñado para uso rápido desde celular y PDF institucional.</p>
         </div>
       </div>
 
@@ -30,10 +30,13 @@
         </div>
         <div class="meta-inline meta-inline-input">
           <label class="meta-label" for="responsableInput">Responsable</label>
-          <div class="search-select search-select-header">
-            <span class="search-icon">🔎</span>
-            <input id="responsableInput" list="responsablesList" placeholder="Buscar responsable" autocomplete="off" />
-            <datalist id="responsablesList"></datalist>
+          <div class="searchable-select" id="responsableSelect">
+            <div class="searchable-control">
+              <span class="search-icon">🔎</span>
+              <input id="responsableInput" type="text" placeholder="Buscar responsable" autocomplete="off" />
+              <button class="search-toggle" type="button" aria-label="Mostrar opciones">▾</button>
+            </div>
+            <div class="searchable-menu" id="responsableMenu"></div>
           </div>
         </div>
       </div>
@@ -45,7 +48,7 @@
           <div class="section-head section-head-compact">
             <h2>Control de acondicionamiento de los móviles</h2>
           </div>
-          <div class="table-wrap no-break">
+          <div class="table-wrap no-break full-width-wrap">
             <table class="report-table report-table-compact" id="movilesTable">
               <thead>
                 <tr><th>Móvil</th><th>Estado</th></tr>
@@ -59,7 +62,7 @@
           <div class="section-head section-head-compact">
             <h2>Control de dependencias</h2>
           </div>
-          <div class="table-wrap no-break">
+          <div class="table-wrap no-break full-width-wrap">
             <table class="report-table report-table-compact" id="dependenciasTable">
               <thead>
                 <tr><th>Dependencia</th><th>Estado</th></tr>
@@ -71,32 +74,39 @@
       </section>
 
       <section class="section-card compact-card">
-        <div class="section-head section-head-compact"><h2>Control de planillas</h2></div>
-        <div class="subsection-title">Control de planillas</div>
-        <div class="table-wrap table-wrap-narrow no-break">
-          <table class="report-table report-table-compact" id="planillasTable">
-            <thead><tr><th>Planilla</th><th>Estado</th></tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
+        <div class="section-head section-head-compact"><h2>Control documental</h2></div>
+        <div class="planillas-grid">
+          <div>
+            <div class="subsection-title">Control de planillas</div>
+            <div class="table-wrap no-break full-width-wrap">
+              <table class="report-table report-table-compact" id="planillasTable">
+                <thead><tr><th>Planilla</th><th>Estado</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
 
-        <div class="subsection-title extra-space">Check de choferes</div>
-        <div class="table-wrap table-wrap-narrow no-break">
-          <table class="report-table report-table-compact" id="choferesTable">
-            <thead><tr><th>Control</th><th>Estado</th></tr></thead>
-            <tbody></tbody>
-          </table>
+          <div>
+            <div class="subsection-title">Check de choferes</div>
+            <div class="table-wrap no-break full-width-wrap">
+              <table class="report-table report-table-compact" id="choferesTable">
+                <thead><tr><th>Control</th><th>Estado</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </section>
 
       <section class="section-card compact-card">
-        <div class="section-head section-head-compact">
+        <div class="section-head section-head-compact guardia-head">
           <div>
             <h2>Reporte de guardia</h2>
-            <p class="section-note">Los bomberos del día se completan automáticamente si la fecha actual coincide con la hoja de guardias.</p>
+            <p class="section-note">Las filas sin datos no se incluirán en el PDF final.</p>
           </div>
+          <p class="section-note section-note-right">La tabla de bomberos puede desplazarse hacia la derecha en celular.</p>
         </div>
-        <div class="table-wrap no-break">
+        <div class="table-wrap no-break guardia-scroll">
           <table class="report-table report-table-lg report-table-guardia" id="guardiaTable">
             <colgroup>
               <col style="width:5%"><col style="width:27%"><col style="width:12%"><col style="width:12%"><col style="width:22%"><col style="width:22%">
@@ -127,9 +137,13 @@
   </div>
 
   <template id="searchInputTemplate">
-    <div class="search-select compact">
-      <span class="search-icon">🔎</span>
-      <input class="table-search-input" type="text" placeholder="Buscar bombero" autocomplete="off" />
+    <div class="searchable-select searchable-select-table">
+      <div class="searchable-control">
+        <span class="search-icon">🔎</span>
+        <input class="table-search-input" type="text" placeholder="Buscar bombero" autocomplete="off" />
+        <button class="search-toggle" type="button" aria-label="Mostrar opciones">▾</button>
+      </div>
+      <div class="searchable-menu"></div>
     </div>
   </template>
 

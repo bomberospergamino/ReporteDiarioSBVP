@@ -30,12 +30,22 @@ const FALLBACK_RESPONSABLES = [
   'CHAVERO, S.', 'DE ANGELIS, D.'
 ];
 
+const LOGO_CANDIDATES = [
+  './logo-sbvp.png',
+  './logo%20SBVP.png',
+  'logo-sbvp.png',
+  'logo%20SBVP.png',
+  './assets/logo-sbvp.png',
+  'assets/logo-sbvp.png'
+];
+
 let responsables = [...FALLBACK_RESPONSABLES];
 let guardiasHoy = [];
 
 const todayLabel = document.getElementById('todayLabel');
-const responsablesList = document.getElementById('responsablesList');
 const responsableInput = document.getElementById('responsableInput');
+const responsableSelect = document.getElementById('responsableSelect');
+const responsableMenu = document.getElementById('responsableMenu');
 const movilesTableBody = document.querySelector('#movilesTable tbody');
 const dependenciasTableBody = document.querySelector('#dependenciasTable tbody');
 const planillasTableBody = document.querySelector('#planillasTable tbody');
@@ -84,13 +94,50 @@ function getTodayIso() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-function populateDatalist(listElement, items) {
-  listElement.innerHTML = '';
-  items.forEach(item => {
-    const option = document.createElement('option');
-    option.value = item;
-    listElement.appendChild(option);
-  });
+function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let value = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const next = text[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && next === '"') {
+        value += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === ',' && !inQuotes) {
+      row.push(value);
+      value = '';
+    } else if ((char === '\n' || char === '\r') && !inQuotes) {
+      if (char === '\r' && next === '\n') i++;
+      row.push(value);
+      if (row.some(cell => cell !== '')) rows.push(row);
+      row = [];
+      value = '';
+    } else {
+      value += char;
+    }
+  }
+
+  if (value.length > 0 || row.length > 0) {
+    row.push(value);
+    if (row.some(cell => cell !== '')) rows.push(row);
+  }
+
+  return rows;
+}
+
+async function fetchCsvRows(url) {
+  const response = await fetch(url, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`No se pudo leer: ${url}`);
+  const text = await response.text();
+  return parseCsv(text);
 }
 
 function createSelect(options, defaultValue = '', placeholder = '') {
@@ -101,12 +148,10 @@ function createSelect(options, defaultValue = '', placeholder = '') {
     const placeholderOption = document.createElement('option');
     placeholderOption.value = '';
     placeholderOption.textContent = placeholder;
-    placeholderOption.selected = defaultValue === '';
     select.appendChild(placeholderOption);
   }
 
   options.forEach(optionText => {
-    if (placeholder && optionText === '') return;
     const option = document.createElement('option');
     option.value = optionText;
     option.textContent = optionText || '—';
@@ -117,17 +162,93 @@ function createSelect(options, defaultValue = '', placeholder = '') {
   return select;
 }
 
+function setupSearchableSelect(wrapper, options, defaultValue = '') {
+  const input = wrapper.querySelector('input');
+  const menu = wrapper.querySelector('.searchable-menu');
+  const toggle = wrapper.querySelector('.search-toggle');
+  wrapper._options = [...options];
+
+  const closeMenu = () => wrapper.classList.remove('open');
+  const openMenu = () => {
+    renderSearchOptions(wrapper, input.value || '');
+    wrapper.classList.add('open');
+  };
+
+  toggle.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (wrapper.classList.contains('open')) closeMenu();
+    else openMenu();
+    input.focus();
+  });
+
+  input.addEventListener('focus', () => openMenu());
+  input.addEventListener('click', (event) => {
+    event.stopPropagation();
+    openMenu();
+  });
+  input.addEventListener('input', () => {
+    wrapper.dataset.value = input.value.trim();
+    renderSearchOptions(wrapper, input.value);
+  });
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeMenu();
+  });
+
+  menu.addEventListener('mousedown', (event) => event.preventDefault());
+
+  document.addEventListener('click', (event) => {
+    if (!wrapper.contains(event.target)) closeMenu();
+  });
+
+  if (defaultValue) {
+    input.value = defaultValue;
+    wrapper.dataset.value = defaultValue;
+  }
+  renderSearchOptions(wrapper, defaultValue || '');
+}
+
+function renderSearchOptions(wrapper, filterText = '') {
+  const input = wrapper.querySelector('input');
+  const menu = wrapper.querySelector('.searchable-menu');
+  const normalizedFilter = String(filterText || '').trim().toLowerCase();
+  const filtered = wrapper._options.filter(item => item.toLowerCase().includes(normalizedFilter));
+  menu.innerHTML = '';
+
+  if (!filtered.length) {
+    const empty = document.createElement('div');
+    empty.className = 'search-empty';
+    empty.textContent = 'Sin coincidencias';
+    menu.appendChild(empty);
+    return;
+  }
+
+  filtered.slice(0, 100).forEach(item => {
+    const option = document.createElement('button');
+    option.type = 'button';
+    option.className = 'search-option';
+    option.textContent = item;
+    option.addEventListener('click', () => {
+      input.value = item;
+      wrapper.dataset.value = item;
+      wrapper.classList.remove('open');
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    menu.appendChild(option);
+  });
+}
+
 function createSearchableBomberoInput(defaultValue = '') {
   const wrapper = searchInputTemplate.content.firstElementChild.cloneNode(true);
-  const input = wrapper.querySelector('input');
-  const listId = `bomberosList_${crypto.randomUUID()}`;
-  const datalist = document.createElement('datalist');
-  datalist.id = listId;
-  input.setAttribute('list', listId);
-  populateDatalist(datalist, responsables);
-  if (defaultValue) input.value = defaultValue;
-  wrapper.appendChild(datalist);
+  setupSearchableSelect(wrapper, responsables, defaultValue);
   return wrapper;
+}
+
+function refreshAllSearchables() {
+  document.querySelectorAll('.searchable-select-table').forEach(wrapper => {
+    const currentValue = wrapper.querySelector('input')?.value || '';
+    setupSearchableSelect(wrapper, responsables, currentValue);
+  });
 }
 
 function renderSimpleTableRow(tbody, name, selectOptions, defaultValue) {
@@ -220,59 +341,12 @@ function renderTables() {
   }
 }
 
-function parseCsv(text) {
-  const rows = [];
-  let row = [];
-  let value = '';
-  let inQuotes = false;
-
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i];
-    const next = text[i + 1];
-
-    if (char === '"') {
-      if (inQuotes && next === '"') {
-        value += '"';
-        i++;
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (char === ',' && !inQuotes) {
-      row.push(value);
-      value = '';
-    } else if ((char === '\n' || char === '\r') && !inQuotes) {
-      if (char === '\r' && next === '\n') i++;
-      row.push(value);
-      if (row.some(cell => cell !== '')) rows.push(row);
-      row = [];
-      value = '';
-    } else {
-      value += char;
-    }
-  }
-
-  if (value.length > 0 || row.length > 0) {
-    row.push(value);
-    if (row.some(cell => cell !== '')) rows.push(row);
-  }
-
-  return rows;
-}
-
-async function fetchCsvRows(url) {
-  const response = await fetch(url, { cache: 'no-store' });
-  if (!response.ok) throw new Error(`No se pudo leer: ${url}`);
-  const text = await response.text();
-  return parseCsv(text);
-}
-
 async function loadResponsables() {
   try {
     const rows = await fetchCsvRows(RESPONSABLES_CSV_URL);
     const values = rows.map(r => (r[0] || '').trim()).filter(Boolean);
     if (values.length) {
       responsables = values;
-      populateDatalist(responsablesList, responsables);
       if (!responsableInput.value) responsableInput.value = responsables[0];
       return true;
     }
@@ -281,7 +355,6 @@ async function loadResponsables() {
   }
 
   responsables = [...FALLBACK_RESPONSABLES];
-  populateDatalist(responsablesList, responsables);
   if (!responsableInput.value) responsableInput.value = responsables[0] || '';
   return false;
 }
@@ -309,6 +382,7 @@ async function refreshAllData() {
   setStatus('Actualizando datos desde Google Sheets...', 'working');
 
   await loadResponsables();
+  setupSearchableSelect(responsableSelect, responsables, responsableInput.value || responsables[0] || '');
   await loadGuardiasHoy();
   renderTables();
 
@@ -324,15 +398,24 @@ function collectSimpleTable(tableId) {
   }));
 }
 
+function rowHasAnyGuardiaData(row) {
+  return Boolean(
+    row.bombero || row.guardia || row.limpieza || row.actividad1 || row.actividad2
+  );
+}
+
 function collectGuardiaTable() {
-  return [...document.querySelectorAll('#guardiaTable tbody tr')].map(tr => ({
-    orden: tr.children[0]?.textContent.trim() || '',
-    bombero: tr.querySelector('.table-search-input')?.value.trim() || '',
-    guardia: tr.querySelector('[data-role="guardia"]')?.value || '',
-    limpieza: tr.querySelector('[data-role="limpieza"]')?.value || '',
-    actividad1: tr.children[4]?.querySelector('select')?.value || '',
-    actividad2: tr.children[5]?.querySelector('select')?.value || ''
-  }));
+  return [...document.querySelectorAll('#guardiaTable tbody tr')]
+    .map(tr => ({
+      orden: tr.children[0]?.textContent.trim() || '',
+      bombero: tr.querySelector('.table-search-input')?.value.trim() || '',
+      guardia: tr.querySelector('[data-role="guardia"]')?.value || '',
+      limpieza: tr.querySelector('[data-role="limpieza"]')?.value || '',
+      actividad1: tr.children[4]?.querySelector('select')?.value || '',
+      actividad2: tr.children[5]?.querySelector('select')?.value || ''
+    }))
+    .filter(rowHasAnyGuardiaData)
+    .map((row, index) => ({ ...row, orden: String(index + 1) }));
 }
 
 function collectReportData() {
@@ -351,15 +434,6 @@ function collectReportData() {
 function buildPdfFilename() {
   return `reporte-guardia-${getTodayIso()}.pdf`;
 }
-
-const LOGO_CANDIDATES = [
-  './logo-sbvp.png',
-  './logo%20SBVP.png',
-  'logo-sbvp.png',
-  'logo%20SBVP.png',
-  './assets/logo-sbvp.png',
-  'assets/logo-sbvp.png'
-];
 
 async function loadImageAsDataUrl(srcCandidates) {
   const candidates = Array.isArray(srcCandidates) ? srcCandidates : [srcCandidates];
@@ -383,12 +457,6 @@ async function loadImageAsDataUrl(srcCandidates) {
   return null;
 }
 
-function sanitizeRows(rows, includeEmpty = false) {
-  return rows
-    .filter(row => includeEmpty || Object.values(row).some(value => String(value || '').trim()))
-    .map(row => Object.values(row).map(value => value || ''));
-}
-
 async function generatePdfBlob(reportData) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
@@ -396,152 +464,127 @@ async function generatePdfBlob(reportData) {
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 10;
   const contentWidth = pageWidth - margin * 2;
+  const halfGap = 6;
+  const halfWidth = (contentWidth - halfGap) / 2;
   const blue = [11, 44, 76];
-  const red = [214, 48, 49];
-  const light = [246, 248, 250];
+  const lightBlue = [245, 247, 250];
   const line = [208, 214, 220];
-  const text = [30, 34, 41];
-  const muted = [88, 100, 112];
+  const text = [35, 40, 46];
+  const muted = [102, 112, 122];
 
   const logoDataUrl = await loadImageAsDataUrl(LOGO_CANDIDATES);
+
   doc.setFillColor(...blue);
-  doc.roundedRect(margin, 10, contentWidth, 24, 3, 3, 'F');
-  if (logoDataUrl) {
-    doc.addImage(logoDataUrl, 'PNG', margin + 3, 12.2, 14, 14);
-  }
+  doc.roundedRect(margin, 10, contentWidth, 22, 3, 3, 'F');
+  if (logoDataUrl) doc.addImage(logoDataUrl, 'PNG', margin + 3, 12, 13, 13);
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
-  doc.text('REGISTRO DIARIO DE CUMPLIMIENTO', margin + 20, 16);
-  doc.setFontSize(18);
-  doc.text('REPORTE DE GUARDIA', margin + 20, 23.5);
+  doc.text('REGISTRO DIARIO DE CUMPLIMIENTO', margin + 20, 15.8);
+  doc.setFontSize(17);
+  doc.text('REPORTE DE GUARDIA', margin + 20, 22.8);
 
-  doc.setFillColor(...light);
+  doc.setFillColor(...lightBlue);
   doc.setDrawColor(...line);
-  doc.roundedRect(margin, 37, 92, 10, 2, 2, 'FD');
-  doc.roundedRect(pageWidth - margin - 92, 37, 92, 10, 2, 2, 'FD');
+  doc.roundedRect(margin, 36, halfWidth, 9.5, 2, 2, 'FD');
+  doc.roundedRect(margin + halfWidth + halfGap, 36, halfWidth, 9.5, 2, 2, 'FD');
   doc.setTextColor(...muted);
-  doc.setFontSize(8);
-  doc.text('FECHA', margin + 3, 43.2);
-  doc.text('RESPONSABLE', pageWidth - margin - 89, 43.2);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.8);
+  doc.text('FECHA', margin + 3, 41.8);
+  doc.text('RESPONSABLE', margin + halfWidth + halfGap + 3, 41.8);
   doc.setTextColor(...text);
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
-  doc.text(reportData.fechaLabel || '—', margin + 20, 43.2);
-  doc.text(reportData.responsable || '—', pageWidth - margin - 60, 43.2);
+  doc.setFontSize(9.6);
+  doc.text(reportData.fechaLabel || '—', margin + 17, 41.8);
+  doc.text(reportData.responsable || '—', margin + halfWidth + halfGap + 28, 41.8);
 
-  const commonHead = {
+  const headStyles = {
     fillColor: blue,
     textColor: 255,
     fontStyle: 'bold',
     lineColor: line,
     lineWidth: 0.1,
-    halign: 'left',
-    valign: 'middle'
+    fontSize: 8.6,
+    cellPadding: 1.6
   };
 
-  const commonBody = {
+  const bodyStyles = {
     textColor: text,
     lineColor: line,
     lineWidth: 0.1,
-    fontSize: 9,
-    cellPadding: 1.8,
+    fontSize: 8.5,
+    cellPadding: 1.5,
     valign: 'middle'
   };
 
+  const drawSectionTitle = (label, x, y) => {
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...blue);
+    doc.setFontSize(10.2);
+    doc.text(label, x, y);
+  };
+
+  const baseTableConfig = {
+    theme: 'grid',
+    headStyles,
+    bodyStyles,
+    styles: { font: 'helvetica', overflow: 'linebreak' }
+  };
+
+  const topTablesY = 51;
+  drawSectionTitle('Control de acondicionamiento de los móviles', margin, 48);
   doc.autoTable({
-    startY: 52,
+    ...baseTableConfig,
+    startY: topTablesY,
     margin: { left: margin },
-    tableWidth: 92,
+    tableWidth: halfWidth,
     head: [['Móvil', 'Estado']],
     body: reportData.moviles.map(r => [r.item, r.estado || '—']),
-    theme: 'grid',
-    headStyles: commonHead,
-    bodyStyles: commonBody,
-    styles: { font: 'helvetica', overflow: 'linebreak' },
-    columnStyles: { 0: { cellWidth: 62 }, 1: { cellWidth: 30 } },
-    didDrawPage: () => {
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(...blue);
-      doc.setFontSize(11);
-      doc.text('Control de acondicionamiento de los móviles', margin, 49.5);
-    }
+    columnStyles: { 0: { cellWidth: halfWidth - 28 }, 1: { cellWidth: 28 } }
   });
+  const movilesBottom = doc.lastAutoTable.finalY;
 
+  drawSectionTitle('Control de dependencias', margin + halfWidth + halfGap, 48);
   doc.autoTable({
-    startY: 52,
-    margin: { left: pageWidth - margin - 92 },
-    tableWidth: 92,
+    ...baseTableConfig,
+    startY: topTablesY,
+    margin: { left: margin + halfWidth + halfGap },
+    tableWidth: halfWidth,
     head: [['Dependencia', 'Estado']],
     body: reportData.dependencias.map(r => [r.item, r.estado || '—']),
-    theme: 'grid',
-    headStyles: commonHead,
-    bodyStyles: commonBody,
-    styles: { font: 'helvetica', overflow: 'linebreak' },
-    columnStyles: { 0: { cellWidth: 62 }, 1: { cellWidth: 30 } },
-    didDrawPage: () => {
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(...blue);
-      doc.setFontSize(11);
-      doc.text('Control de dependencias', pageWidth - margin - 92, 49.5);
-    }
+    columnStyles: { 0: { cellWidth: halfWidth - 28 }, 1: { cellWidth: 28 } }
   });
+  const dependBottom = doc.lastAutoTable.finalY;
 
-  let nextY = Math.max(doc.lastAutoTable.finalY || 52, doc.previousAutoTable?.finalY || 52) + 10;
-  // Better compute based on plugin tables:
-  const tables = doc.lastAutoTable ? [doc.lastAutoTable] : [];
-  nextY = Math.max(
-    doc.autoTable.previous?.finalY || 0,
-    126
-  );
+  let nextY = Math.max(movilesBottom, dependBottom) + 9;
 
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...blue);
-  doc.setFontSize(11);
-  doc.text('Control de planillas', margin, nextY);
+  drawSectionTitle('Control de planillas', margin, nextY);
   doc.autoTable({
+    ...baseTableConfig,
     startY: nextY + 2,
     margin: { left: margin },
-    tableWidth: 96,
+    tableWidth: halfWidth,
     head: [['Planilla', 'Estado']],
     body: reportData.planillas.map(r => [r.item, r.estado || '—']),
-    theme: 'grid',
-    headStyles: commonHead,
-    bodyStyles: commonBody,
-    styles: { font: 'helvetica', overflow: 'linebreak' },
-    columnStyles: { 0: { cellWidth: 66 }, 1: { cellWidth: 30 } }
+    columnStyles: { 0: { cellWidth: halfWidth - 28 }, 1: { cellWidth: 28 } }
   });
+  const planillasBottom = doc.lastAutoTable.finalY;
 
-  let afterPlanillas = doc.lastAutoTable.finalY + 8;
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...blue);
-  doc.setFontSize(11);
-  doc.text('Check de choferes', margin, afterPlanillas);
+  drawSectionTitle('Check de choferes', margin + halfWidth + halfGap, nextY);
   doc.autoTable({
-    startY: afterPlanillas + 2,
-    margin: { left: margin },
-    tableWidth: 96,
+    ...baseTableConfig,
+    startY: nextY + 2,
+    margin: { left: margin + halfWidth + halfGap },
+    tableWidth: halfWidth,
     head: [['Control', 'Estado']],
     body: reportData.choferes.map(r => [r.item, r.estado || '—']),
-    theme: 'grid',
-    headStyles: commonHead,
-    bodyStyles: commonBody,
-    styles: { font: 'helvetica', overflow: 'linebreak' },
-    columnStyles: { 0: { cellWidth: 66 }, 1: { cellWidth: 30 } }
+    columnStyles: { 0: { cellWidth: halfWidth - 28 }, 1: { cellWidth: 28 } }
   });
+  const choferesBottom = doc.lastAutoTable.finalY;
 
-  let guardiaY = doc.lastAutoTable.finalY + 10;
-  if (guardiaY > 230) {
-    doc.addPage();
-    guardiaY = 14;
-  }
-
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...blue);
-  doc.setFontSize(11);
-  doc.text('Reporte de guardia', margin, guardiaY);
-
-  const guardiaBody = reportData.guardia.map(r => [
+  let guardiaY = Math.max(planillasBottom, choferesBottom) + 10;
+  const guardiaBody = (reportData.guardia.length ? reportData.guardia : []).map(r => [
     r.orden,
     r.bombero || '—',
     r.guardia || '—',
@@ -550,26 +593,30 @@ async function generatePdfBlob(reportData) {
     r.actividad2 || '—'
   ]);
 
+  if (guardiaY > 245) {
+    doc.addPage();
+    guardiaY = 14;
+  }
+
+  drawSectionTitle('Reporte de guardia', margin, guardiaY);
   doc.autoTable({
+    ...baseTableConfig,
     startY: guardiaY + 2,
     margin: { left: margin, right: margin },
     tableWidth: contentWidth,
     head: [['#', 'Bombero', 'Guardia', 'Limpieza', 'Actividad 1', 'Actividad 2']],
-    body: guardiaBody,
-    theme: 'grid',
-    headStyles: commonHead,
-    bodyStyles: commonBody,
-    styles: { font: 'helvetica', overflow: 'linebreak' },
+    body: guardiaBody.length ? guardiaBody : [['', '—', '—', '—', '—', '—']],
     columnStyles: {
       0: { cellWidth: 8, halign: 'center' },
-      1: { cellWidth: 52 },
-      2: { cellWidth: 23 },
-      3: { cellWidth: 23 },
-      4: { cellWidth: 41 },
-      5: { cellWidth: 41 }
+      1: { cellWidth: 49 },
+      2: { cellWidth: 22 },
+      3: { cellWidth: 22 },
+      4: { cellWidth: 44 },
+      5: { cellWidth: 44 }
     },
-    didDrawPage: data => {
+    didDrawPage: () => {
       const str = `Página ${doc.getNumberOfPages()}`;
+      doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
       doc.setTextColor(...muted);
       doc.text(str, pageWidth - margin, pageHeight - 6, { align: 'right' });
@@ -619,7 +666,7 @@ async function downloadPdf() {
 
 async function saveToDrive() {
   if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.includes('PEGAR_AQUI')) {
-    alert('Primero pegá la URL del Web App de Apps Script en app.js');
+    alert('Primero configurá la URL del Web App de Apps Script en app.js');
     return;
   }
 
@@ -645,7 +692,6 @@ async function saveToDrive() {
     });
 
     setStatus('Reporte enviado. Verificá Drive y la hoja Historial.', 'success');
-    alert('Reporte enviado a Apps Script. Como el Web App responde en modo no-cors, la confirmación final se valida revisando Drive y Sheets.');
   } catch (error) {
     console.error(error);
     setStatus('No se pudo enviar el reporte a Drive.', 'error');
@@ -661,5 +707,5 @@ downloadPdfBtn.addEventListener('click', downloadPdf);
 saveDriveBtn.addEventListener('click', saveToDrive);
 
 formatTodayDisplay();
-populateDatalist(responsablesList, responsables);
+setupSearchableSelect(responsableSelect, responsables, responsableInput.value || responsables[0] || '');
 refreshAllData();
