@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Reporte de guardia</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <div id="pdfContent">
+      <header class="hero-card" id="pdf-header">
+        <div class="hero-left">
+          <img src="assets/logo-sbvp.png" alt="Logo Bomberos Voluntarios Pergamino" class="hero-logo" />
+        </div>
+        <div class="hero-center">
+          <p class="eyebrow">Registro diario de cumplimiento</p>
+          <h1>Reporte de guardia</h1>
+        </div>
+        <div class="hero-right hero-meta">
+          <div class="meta-box">
+            <span class="meta-label">Fecha</span>
+            <span class="meta-value" id="todayLabel"></span>
+          </div>
+          <div class="meta-box meta-box-input">
+            <label class="meta-label" for="responsableInput">Responsable</label>
+            <div class="search-select">
+              <span class="search-icon">🔎</span>
+              <input id="responsableInput" list="responsablesList" placeholder="Buscar responsable" autocomplete="off" />
+              <datalist id="responsablesList"></datalist>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main id="reportContent">
+        <section class="duo-grid">
+          <section class="section-card half-card">
+            <div class="section-head">
+              <h2>Control de acondicionamiento de los móviles</h2>
+              <p>Estado por defecto: <strong>Bien</strong></p>
+            </div>
+            <div class="table-wrap">
+              <table class="report-table" id="movilesTable">
+                <thead>
+                  <tr>
+                    <th>Móvil</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="section-card half-card">
+            <div class="section-head">
+              <h2>Control de dependencias</h2>
+              <p>Estado por defecto: <strong>Bien</strong></p>
+            </div>
+            <div class="table-wrap">
+              <table class="report-table" id="dependenciasTable">
+                <thead>
+                  <tr>
+                    <th>Dependencia</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section class="section-card">
+          <div class="section-head">
+            <h2>Control de planillas</h2>
+            <p>Estado por defecto: <strong>Completa</strong></p>
+          </div>
+          <div class="subsection-title">Control de planillas</div>
+          <div class="table-wrap table-wrap-narrow">
+            <table class="report-table" id="planillasTable">
+              <thead>
+                <tr>
+                  <th>Planilla</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+
+          <div class="subsection-title extra-space">Check de choferes</div>
+          <div class="table-wrap table-wrap-narrow">
+            <table class="report-table" id="choferesTable">
+              <thead>
+                <tr>
+                  <th>Control</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section-card">
+          <div class="section-head">
+            <h2>Reporte de guardia</h2>
+            <p>Los bomberos del día se completan automáticamente si la fecha actual coincide con la hoja de guardias.</p>
+          </div>
+          <div class="table-wrap">
+            <table class="report-table report-table-lg" id="guardiaTable">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Bombero</th>
+                  <th>Guardia</th>
+                  <th>Limpieza</th>
+                  <th>Actividad 1</th>
+                  <th>Actividad 2</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <footer class="actions-bar">
+      <button id="reloadDataBtn" class="btn btn-secondary" type="button">Actualizar datos</button>
+      <button id="downloadPdfBtn" class="btn btn-primary" type="button">Descargar PDF</button>
+    </footer>
+  </div>
+
+  <template id="searchInputTemplate">
+    <div class="search-select compact">
+      <span class="search-icon">🔎</span>
+      <input class="table-search-input" type="text" placeholder="Buscar bombero" autocomplete="off" />
+    </div>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>
