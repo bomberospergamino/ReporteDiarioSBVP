@@ -1,711 +1,764 @@
-const RESPONSABLES_CSV_URL = 'https://docs.google.com/spreadsheets/d/1-4wvA_QGAFXGjrhC13WJujRlfw6N77p47OIuc9eYEAs/gviz/tq?tqx=out:csv&sheet=Hoja%201';
-const GUARDIAS_CSV_URL = 'https://docs.google.com/spreadsheets/d/1jF7Eb-V9JOfzINAfywfRzhIl4nhVd39Az19VTWkDEOs/gviz/tq?tqx=out:csv&sheet=Hoja%201';
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwEw-qxvU1pvSnnp39s4LD8x45iai9YkHpaiqzY5q4DkCKOsFdPMDW0x8oC0MkUhADx/exec';
+const CONFIG = {
+  spreadsheetId: "1fkfiSwjaFuysUVHaTTaHziDee0Atmrpo-cbH_iqrCuw",
+  personnelGid: "0",
+  signaturesGid: "1632175139",
+  historyDays: 60,
+  appsScriptUrl: "",
+};
 
-const MOVILES = [
-  'Móvil N°3', 'Móvil N°5', 'Móvil N°6', 'Móvil N°8', 'Móvil N°11',
-  'Móvil N°12', 'Móvil N°19', 'Móvil N°24', 'Móvil N°25', 'Móvil N°26', 'Móvil N°27'
+const PLACE_ITEMS = [
+  "Sala de maquinas",
+  "Baño femenino",
+  "Vestuario femenino",
+  "Vestuario masculino",
+  "Baño Masculino",
+  "Cocina",
+  "Patio",
+  "Casino",
+  "Jefatura",
+  "Vereda",
 ];
 
-const DEPENDENCIAS = [
-  'Sala de máquinas', 'Baño femenino', 'Vestuario femenino', 'Vestuario masculino',
-  'Baño masculino', 'Cocina', 'Patio', 'Casino', 'Jefatura', 'Vereda'
+const VEHICLE_ITEMS = [
+  "Móvil N°3",
+  "Móvil N°5",
+  "Móvil N°6",
+  "Móvil N°8",
+  "Móvil N°9",
+  "Móvil N°11",
+  "Móvil N°12",
+  "Móvil N°19",
+  "Móvil N°24",
+  "Móvil N°26",
+  "Móvil N°27",
 ];
 
-const PLANILLAS = ['Guardia diaria', 'Limpieza diaria', 'Check de ERA', 'Check de móviles'];
-const CHOFERES = ['Enviado por mail', 'Registrado en el libro'];
-const ESTADOS_CONTROL = ['Bien', 'Mal', 'Fuera de servicio', 'N/A'];
-const ESTADOS_DEPENDENCIA = ['Bien', 'Mal', 'N/A'];
-const ESTADOS_PLANILLAS = ['Completa', 'Incompleta'];
-const ESTADOS_ASISTENCIA = ['Presente', 'Ausente'];
-const ACTIVIDADES = [
-  '',
-  'Móvil N°3', 'Móvil N°5', 'Móvil N°6', 'Móvil N°8', 'Móvil N°11', 'Móvil N°12',
-  'Móvil N°19', 'Móvil N°24', 'Móvil N°25', 'Móvil N°26', 'Móvil N°27',
-  'Control de ERA', 'Mandados', 'Cocinar', 'Reporte diario'
+const CONDITION_OPTIONS = ["Bueno", "N/A", "Malo"];
+const SHEET_STATUS_OPTIONS = ["Completa", "Incompleta"];
+const GUARDIA_OPTIONS = ["Presente", "Ausente"];
+const LIMPIEZA_OPTIONS = ["Realizo", "No realizo"];
+const TASK_OPTIONS = ["Cocinar", "Mandados", "ERA", "Control de móvil"];
+
+const PLANILLA_ITEMS = [
+  "Guardia diaria",
+  "Limpieza diaria",
+  "Check de ERA",
+  "Check de móviles",
 ];
 
-const FALLBACK_RESPONSABLES = [
-  'PUIG, R.', 'VIOLANTE, F.', 'LEIDE, M.', 'AVILÉS F., M.',
-  'CHAVERO, S.', 'DE ANGELIS, D.'
+const DRIVER_CHECK_ITEMS = [
+  "Check de choferes",
+  "Enviado por mail",
+  "Registrado en el libro",
 ];
 
-const LOGO_CANDIDATES = [
-  './logo-sbvp.png',
-  './logo%20SBVP.png',
-  'logo-sbvp.png',
-  'logo%20SBVP.png',
-  './assets/logo-sbvp.png',
-  'assets/logo-sbvp.png'
-];
+const STORAGE_KEYS = {
+  draft: "sbvp-control-diario-draft-v2",
+  history: "sbvp-control-diario-history-v1",
+  pendingSignatureUpdates: "sbvp-control-firmas-pending-v1",
+};
 
-let responsables = [...FALLBACK_RESPONSABLES];
-let guardiasHoy = [];
+const state = {
+  personnel: [],
+  signatures: [],
+  draftResponsible: "",
+  checks: {
+    lugares: PLACE_ITEMS.map((name) => ({ name, condition: "Bueno", note: "" })),
+    moviles: VEHICLE_ITEMS.map((name) => ({ name, condition: "Bueno", note: "" })),
+    planillas: PLANILLA_ITEMS.map((name) => ({ name, condition: "Completa", note: "" })),
+    choferes: DRIVER_CHECK_ITEMS.map((name) => ({ name, condition: "Completa", note: "" })),
+  },
+  attendance: [],
+  signatureControl: {},
+};
 
-const todayLabel = document.getElementById('todayLabel');
-const responsableInput = document.getElementById('responsableInput');
-const responsableSelect = document.getElementById('responsableSelect');
-const responsableMenu = document.getElementById('responsableMenu');
-const movilesTableBody = document.querySelector('#movilesTable tbody');
-const dependenciasTableBody = document.querySelector('#dependenciasTable tbody');
-const planillasTableBody = document.querySelector('#planillasTable tbody');
-const choferesTableBody = document.querySelector('#choferesTable tbody');
-const guardiaTableBody = document.querySelector('#guardiaTable tbody');
-const reloadDataBtn = document.getElementById('reloadDataBtn');
-const downloadPdfBtn = document.getElementById('downloadPdfBtn');
-const saveDriveBtn = document.getElementById('saveDriveBtn');
-const statusBar = document.getElementById('statusBar');
-const searchInputTemplate = document.getElementById('searchInputTemplate');
+const $ = (selector) => document.querySelector(selector);
 
-function setStatus(message, type = '') {
-  statusBar.textContent = message;
-  statusBar.className = `status-bar ${type}`.trim();
+document.addEventListener("DOMContentLoaded", init);
+
+async function init() {
+  $("#controlDate").value = new Date().toISOString().slice(0, 10);
+  bindTabs();
+  bindActions();
+  loadDraft();
+  pruneHistory();
+  renderChecks("lugares");
+  renderChecks("moviles");
+  renderChecks("planillas");
+  renderChecks("choferes");
+  renderAttendance();
+  renderHistory();
+  await loadRemoteData();
+  await flushPendingSignatureUpdates();
+  updateProgress();
 }
 
-function formatTodayDisplay() {
-  const formatter = new Intl.DateTimeFormat('es-AR', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/Argentina/Buenos_Aires'
+function bindTabs() {
+  document.querySelectorAll(".tab").forEach((button) => {
+    button.addEventListener("click", () => openTab(button.dataset.tab));
   });
-  const label = formatter.format(new Date());
-  todayLabel.textContent = label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-function getTodayVariants() {
-  const now = new Date();
-  const parts = new Intl.DateTimeFormat('es-AR', {
-    year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'America/Argentina/Buenos_Aires'
-  }).formatToParts(now);
-
-  const dd = parts.find(p => p.type === 'day')?.value ?? '';
-  const mm = parts.find(p => p.type === 'month')?.value ?? '';
-  const yyyy = parts.find(p => p.type === 'year')?.value ?? '';
-
-  return [`${dd}/${mm}/${yyyy}`, `${Number(dd)}/${Number(mm)}/${yyyy}`, `${yyyy}-${mm}-${dd}`];
+function openTab(tabName) {
+  document.querySelectorAll(".tab, .tab-panel").forEach((el) => el.classList.remove("active"));
+  const button = document.querySelector(`.tab[data-tab="${tabName}"]`);
+  if (button) button.classList.add("active");
+  $(`#tab-${tabName}`).classList.add("active");
 }
 
-function getTodayIso() {
-  const now = new Date();
-  const parts = new Intl.DateTimeFormat('es-AR', {
-    year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'America/Argentina/Buenos_Aires'
-  }).formatToParts(now);
-  const dd = parts.find(p => p.type === 'day')?.value ?? '00';
-  const mm = parts.find(p => p.type === 'month')?.value ?? '00';
-  const yyyy = parts.find(p => p.type === 'year')?.value ?? '0000';
-  return `${yyyy}-${mm}-${dd}`;
+function bindActions() {
+  $("#openHistoryTop").addEventListener("click", () => openTab("historico"));
+  $("#setAttendanceAmount").addEventListener("click", setAttendanceAmount);
+  $("#saveDraft").addEventListener("click", () => {
+    saveDraft();
+    setStatus("Borrador guardado", "ok");
+  });
+  $("#finishControl").addEventListener("click", finishControl);
+  $("#clearHistory").addEventListener("click", () => {
+    localStorage.removeItem(STORAGE_KEYS.history);
+    renderHistory();
+  });
+  ["controlDate", "responsibleSearch"].forEach((id) => {
+    $(`#${id}`).addEventListener("change", saveDraft);
+  });
 }
 
-function parseCsv(text) {
-  const rows = [];
-  let row = [];
-  let value = '';
-  let inQuotes = false;
+async function loadRemoteData() {
+  setStatus("Leyendo planilla...", "");
+  try {
+    const [personnel, signatures] = await Promise.all([
+      fetchSheet(CONFIG.personnelGid),
+      fetchSheet(CONFIG.signaturesGid),
+    ]);
+    state.personnel = personnel
+      .filter((row) => row.apellido_nombre || row.BOMBERO || row.NOMBRE)
+      .map((row) => ({
+        id: row.persona_id || "",
+        label: row.apellido_nombre || row.BOMBERO || `${row.APELLIDO || ""}, ${row.NOMBRE || ""}`.trim(),
+        section: row.SECCION || "",
+        grade: row.grado || "",
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label, "es"));
+    state.signatures = signatures.filter((row) => !isCompleteSignatureRow(row));
+    renderPersonnel();
+    renderSignatures();
+    setStatus(`Planilla actualizada: ${state.personnel.length} personas`, "ok");
+  } catch (error) {
+    console.error(error);
+    renderSignatures();
+    setStatus("No se pudo leer la planilla", "warn");
+  }
+}
 
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i];
-    const next = text[i + 1];
+function fetchSheet(gid) {
+  return new Promise((resolve, reject) => {
+    const callback = `sbvpSheetCallback_${gid}_${Date.now()}`;
+    const script = document.createElement("script");
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      reject(new Error(`Tiempo agotado leyendo hoja ${gid}`));
+    }, 15000);
 
-    if (char === '"') {
-      if (inQuotes && next === '"') {
-        value += '"';
-        i++;
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (char === ',' && !inQuotes) {
-      row.push(value);
-      value = '';
-    } else if ((char === '\n' || char === '\r') && !inQuotes) {
-      if (char === '\r' && next === '\n') i++;
-      row.push(value);
-      if (row.some(cell => cell !== '')) rows.push(row);
-      row = [];
-      value = '';
-    } else {
-      value += char;
+    function cleanup() {
+      window.clearTimeout(timeout);
+      delete window[callback];
+      script.remove();
     }
-  }
 
-  if (value.length > 0 || row.length > 0) {
-    row.push(value);
-    if (row.some(cell => cell !== '')) rows.push(row);
-  }
+    window[callback] = (payload) => {
+      cleanup();
+      if (payload.status !== "ok") {
+        reject(new Error(payload.errors?.[0]?.detailed_message || `Error leyendo hoja ${gid}`));
+        return;
+      }
+      resolve(parseGviz(payload));
+    };
 
-  return rows;
-}
-
-async function fetchCsvRows(url) {
-  const response = await fetch(url, { cache: 'no-store' });
-  if (!response.ok) throw new Error(`No se pudo leer: ${url}`);
-  const text = await response.text();
-  return parseCsv(text);
-}
-
-function createSelect(options, defaultValue = '', placeholder = '') {
-  const select = document.createElement('select');
-  select.className = 'select-field';
-
-  if (placeholder) {
-    const placeholderOption = document.createElement('option');
-    placeholderOption.value = '';
-    placeholderOption.textContent = placeholder;
-    select.appendChild(placeholderOption);
-  }
-
-  options.forEach(optionText => {
-    const option = document.createElement('option');
-    option.value = optionText;
-    option.textContent = optionText || '—';
-    if (optionText === defaultValue) option.selected = true;
-    select.appendChild(option);
+    script.onerror = () => {
+      cleanup();
+      reject(new Error(`No se pudo cargar hoja ${gid}`));
+    };
+    script.src = `https://docs.google.com/spreadsheets/d/${CONFIG.spreadsheetId}/gviz/tq?gid=${gid}&headers=1&tqx=responseHandler:${callback};out:json`;
+    document.head.appendChild(script);
   });
-
-  return select;
 }
 
-function setupSearchableSelect(wrapper, options, defaultValue = '') {
-  const input = wrapper.querySelector('input');
-  const menu = wrapper.querySelector('.searchable-menu');
-  const toggle = wrapper.querySelector('.search-toggle');
-  wrapper._options = [...options];
+function parseGviz(payload) {
+  const table = payload.table;
+  const headers = table.cols.map((col, index) => normalizeHeader(col.label || `col_${index}`));
+  return table.rows.map((row) => {
+    const item = {};
+    headers.forEach((header, index) => {
+      item[header] = row.c[index]?.f ?? row.c[index]?.v ?? "";
+    });
+    return item;
+  });
+}
 
-  const closeMenu = () => wrapper.classList.remove('open');
-  const openMenu = () => {
-    renderSearchOptions(wrapper, input.value || '');
-    wrapper.classList.add('open');
+function normalizeHeader(value) {
+  return String(value)
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, "_");
+}
+
+function renderPersonnel() {
+  const responsible = $("#responsibleSearch");
+  const datalist = $("#personnelList");
+  const current = responsible.value || state.draftResponsible;
+  responsible.innerHTML = `<option value="">Seleccionar persona</option>`;
+  datalist.innerHTML = "";
+  state.personnel.forEach((person) => {
+    const option = document.createElement("option");
+    option.value = person.label;
+    option.textContent = person.label;
+    responsible.appendChild(option);
+
+    const dataOption = document.createElement("option");
+    dataOption.value = person.label;
+    dataOption.label = [person.grade, person.section].filter(Boolean).join(" - ");
+    datalist.appendChild(dataOption);
+  });
+  responsible.value = current;
+  state.draftResponsible = "";
+}
+
+function renderChecks(kind) {
+  const containers = {
+    lugares: $("#placeChecks"),
+    moviles: $("#vehicleChecks"),
+    planillas: $("#sheetChecks"),
+    choferes: $("#driverChecks"),
   };
-
-  toggle.addEventListener('click', (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (wrapper.classList.contains('open')) closeMenu();
-    else openMenu();
-    input.focus();
+  const options = kind === "lugares" || kind === "moviles" ? CONDITION_OPTIONS : SHEET_STATUS_OPTIONS;
+  const container = containers[kind];
+  container.innerHTML = "";
+  state.checks[kind].forEach((item, index) => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td><strong>${escapeHtml(item.name)}</strong></td>
+      <td>
+        <select aria-label="Condicion de ${escapeAttr(item.name)}">
+          ${options.map((condition) => `<option value="${condition}" ${item.condition === condition ? "selected" : ""}>${condition}</option>`).join("")}
+        </select>
+      </td>
+      <td><input type="text" value="${escapeAttr(item.note)}" placeholder="Sin observaciones" /></td>
+    `;
+    row.querySelector("select").addEventListener("change", (event) => {
+      state.checks[kind][index].condition = event.target.value;
+      saveDraft();
+      updateProgress();
+    });
+    row.querySelector("input").addEventListener("input", (event) => {
+      state.checks[kind][index].note = event.target.value;
+      saveDraft();
+    });
+    container.appendChild(row);
   });
-
-  input.addEventListener('focus', () => openMenu());
-  input.addEventListener('click', (event) => {
-    event.stopPropagation();
-    openMenu();
-  });
-  input.addEventListener('input', () => {
-    wrapper.dataset.value = input.value.trim();
-    renderSearchOptions(wrapper, input.value);
-  });
-  input.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') closeMenu();
-  });
-
-  menu.addEventListener('mousedown', (event) => event.preventDefault());
-
-  document.addEventListener('click', (event) => {
-    if (!wrapper.contains(event.target)) closeMenu();
-  });
-
-  if (defaultValue) {
-    input.value = defaultValue;
-    wrapper.dataset.value = defaultValue;
-  }
-  renderSearchOptions(wrapper, defaultValue || '');
+  updateCounts();
 }
 
-function renderSearchOptions(wrapper, filterText = '') {
-  const input = wrapper.querySelector('input');
-  const menu = wrapper.querySelector('.searchable-menu');
-  const normalizedFilter = String(filterText || '').trim().toLowerCase();
-  const filtered = wrapper._options.filter(item => item.toLowerCase().includes(normalizedFilter));
-  menu.innerHTML = '';
+function setAttendanceAmount() {
+  const amount = Math.max(0, Math.min(80, Number($("#attendanceAmount").value) || 0));
+  const current = state.attendance.slice(0, amount);
+  while (current.length < amount) {
+    current.push({
+      name: "",
+      guardia: "Presente",
+      limpieza: "Realizo",
+      tasks: [],
+      note: "",
+    });
+  }
+  state.attendance = current;
+  $("#attendanceAmount").value = String(amount);
+  renderAttendance();
+  saveDraft();
+}
 
-  if (!filtered.length) {
-    const empty = document.createElement('div');
-    empty.className = 'search-empty';
-    empty.textContent = 'Sin coincidencias';
-    menu.appendChild(empty);
+function renderAttendance() {
+  const container = $("#attendanceRows");
+  $("#attendanceAmount").value = String(state.attendance.length);
+  if (!state.attendance.length) {
+    container.innerHTML = `<tr><td colspan="5" class="empty-cell">Todavia no se agregaron personas a asistencia.</td></tr>`;
     return;
   }
-
-  filtered.slice(0, 100).forEach(item => {
-    const option = document.createElement('button');
-    option.type = 'button';
-    option.className = 'search-option';
-    option.textContent = item;
-    option.addEventListener('click', () => {
-      input.value = item;
-      wrapper.dataset.value = item;
-      wrapper.classList.remove('open');
-      input.dispatchEvent(new Event('change', { bubbles: true }));
+  container.innerHTML = "";
+  state.attendance.forEach((item, index) => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td><input list="personnelList" value="${escapeAttr(item.name)}" placeholder="Buscar persona" /></td>
+      <td>
+        <select>
+          ${GUARDIA_OPTIONS.map((status) => `<option value="${status}" ${item.guardia === status ? "selected" : ""}>${status}</option>`).join("")}
+        </select>
+      </td>
+      <td>
+        <select>
+          ${LIMPIEZA_OPTIONS.map((status) => `<option value="${status}" ${item.limpieza === status ? "selected" : ""}>${status}</option>`).join("")}
+        </select>
+      </td>
+      <td>
+        <select multiple size="4">
+          ${TASK_OPTIONS.map((task) => `<option value="${task}" ${(item.tasks || []).includes(task) ? "selected" : ""}>${task}</option>`).join("")}
+        </select>
+      </td>
+      <td><input value="${escapeAttr(item.note)}" placeholder="Sin observaciones" /></td>
+    `;
+    const inputs = row.querySelectorAll("input");
+    const selects = row.querySelectorAll("select");
+    inputs[0].addEventListener("input", (event) => {
+      state.attendance[index].name = event.target.value;
+      saveDraft();
     });
-    menu.appendChild(option);
+    selects[0].addEventListener("change", (event) => {
+      state.attendance[index].guardia = event.target.value;
+      saveDraft();
+    });
+    selects[1].addEventListener("change", (event) => {
+      state.attendance[index].limpieza = event.target.value;
+      saveDraft();
+    });
+    selects[2].addEventListener("change", (event) => {
+      state.attendance[index].tasks = Array.from(event.target.selectedOptions).map((option) => option.value);
+      saveDraft();
+    });
+    inputs[1].addEventListener("input", (event) => {
+      state.attendance[index].note = event.target.value;
+      saveDraft();
+    });
+    container.appendChild(row);
   });
 }
 
-function createSearchableBomberoInput(defaultValue = '') {
-  const wrapper = searchInputTemplate.content.firstElementChild.cloneNode(true);
-  setupSearchableSelect(wrapper, responsables, defaultValue);
-  return wrapper;
-}
-
-function refreshAllSearchables() {
-  document.querySelectorAll('.searchable-select-table').forEach(wrapper => {
-    const currentValue = wrapper.querySelector('input')?.value || '';
-    setupSearchableSelect(wrapper, responsables, currentValue);
-  });
-}
-
-function renderSimpleTableRow(tbody, name, selectOptions, defaultValue) {
-  const tr = document.createElement('tr');
-  const tdName = document.createElement('td');
-  tdName.className = 'item-name';
-  tdName.textContent = name;
-
-  const tdStatus = document.createElement('td');
-  tdStatus.appendChild(createSelect(selectOptions, defaultValue));
-
-  tr.append(tdName, tdStatus);
-  tbody.appendChild(tr);
-}
-
-function isBomberoComplete(value) {
-  return Boolean(value && value.trim());
-}
-
-function syncGuardRowState(tr) {
-  const bomberoInput = tr.querySelector('.table-search-input');
-  const guardiaSelect = tr.querySelector('[data-role="guardia"]');
-  const limpiezaSelect = tr.querySelector('[data-role="limpieza"]');
-  const hasBombero = isBomberoComplete(bomberoInput.value);
-
-  guardiaSelect.disabled = !hasBombero;
-  limpiezaSelect.disabled = !hasBombero;
-
-  if (!hasBombero) {
-    guardiaSelect.value = '';
-    limpiezaSelect.value = '';
-  } else {
-    if (!guardiaSelect.value) guardiaSelect.value = 'Presente';
-    if (!limpiezaSelect.value) limpiezaSelect.value = 'Presente';
+function renderSignatures() {
+  const container = $("#signatureRows");
+  const rows = state.signatures;
+  renderSignatureSummary(rows);
+  if (!rows.length) {
+    container.innerHTML = `<tr><td colspan="7" class="empty-cell">No hay partes pendientes para controlar.</td></tr>`;
+    return;
   }
-}
-
-function buildGuardiaRow(index, bombero = '') {
-  const tr = document.createElement('tr');
-
-  const tdIndex = document.createElement('td');
-  tdIndex.className = 'row-index';
-  tdIndex.textContent = String(index + 1);
-
-  const tdBombero = document.createElement('td');
-  const bomberoField = createSearchableBomberoInput(bombero);
-  tdBombero.appendChild(bomberoField);
-
-  const tdGuardia = document.createElement('td');
-  const guardiaSelect = createSelect(ESTADOS_ASISTENCIA, '', '');
-  guardiaSelect.dataset.role = 'guardia';
-  tdGuardia.appendChild(guardiaSelect);
-
-  const tdLimpieza = document.createElement('td');
-  const limpiezaSelect = createSelect(ESTADOS_ASISTENCIA, '', '');
-  limpiezaSelect.dataset.role = 'limpieza';
-  tdLimpieza.appendChild(limpiezaSelect);
-
-  const tdActividad1 = document.createElement('td');
-  tdActividad1.appendChild(createSelect(ACTIVIDADES, '', 'Seleccionar'));
-
-  const tdActividad2 = document.createElement('td');
-  tdActividad2.appendChild(createSelect(ACTIVIDADES, '', 'Seleccionar'));
-
-  tr.append(tdIndex, tdBombero, tdGuardia, tdLimpieza, tdActividad1, tdActividad2);
-
-  const bomberoInput = bomberoField.querySelector('.table-search-input');
-  bomberoInput.addEventListener('input', () => syncGuardRowState(tr));
-  bomberoInput.addEventListener('change', () => syncGuardRowState(tr));
-  syncGuardRowState(tr);
-
-  return tr;
-}
-
-function renderTables() {
-  movilesTableBody.innerHTML = '';
-  dependenciasTableBody.innerHTML = '';
-  planillasTableBody.innerHTML = '';
-  choferesTableBody.innerHTML = '';
-  guardiaTableBody.innerHTML = '';
-
-  MOVILES.forEach(item => renderSimpleTableRow(movilesTableBody, item, ESTADOS_CONTROL, 'Bien'));
-  DEPENDENCIAS.forEach(item => renderSimpleTableRow(dependenciasTableBody, item, ESTADOS_DEPENDENCIA, 'Bien'));
-  PLANILLAS.forEach(item => renderSimpleTableRow(planillasTableBody, item, ESTADOS_PLANILLAS, 'Completa'));
-  CHOFERES.forEach(item => renderSimpleTableRow(choferesTableBody, item, ESTADOS_PLANILLAS, 'Completa'));
-
-  const defaultRows = Math.max(8, guardiasHoy.length || 0);
-  for (let i = 0; i < defaultRows; i++) {
-    guardiaTableBody.appendChild(buildGuardiaRow(i, guardiasHoy[i] || ''));
-  }
-}
-
-async function loadResponsables() {
-  try {
-    const rows = await fetchCsvRows(RESPONSABLES_CSV_URL);
-    const values = rows.map(r => (r[0] || '').trim()).filter(Boolean);
-    if (values.length) {
-      responsables = values;
-      if (!responsableInput.value) responsableInput.value = responsables[0];
-      return true;
+  container.innerHTML = "";
+  rows.forEach((item) => {
+    const id = signatureId(item);
+    if (!state.signatureControl[id]) {
+      state.signatureControl[id] = {
+        firmaPersonaACargo: toBool(item.firma_persona_a_cargo),
+        firmaOperador: toBool(item.firma_operador),
+      };
     }
-  } catch (error) {
-    console.warn('No se pudieron cargar responsables desde Google Sheets.', error);
-  }
-
-  responsables = [...FALLBACK_RESPONSABLES];
-  if (!responsableInput.value) responsableInput.value = responsables[0] || '';
-  return false;
+    const control = state.signatureControl[id];
+    const complete = control.firmaPersonaACargo && control.firmaOperador;
+    const row = document.createElement("tr");
+    row.className = complete ? "complete-row" : "";
+    row.innerHTML = `
+      <td><strong>${escapeHtml(item.parte_servicio || "-")}</strong></td>
+      <td>${escapeHtml(item.fecha_servicio || "-")}</td>
+      <td>${escapeHtml(item.persona_a_cargo || "-")}</td>
+      <td class="check-cell"><input type="checkbox" ${control.firmaPersonaACargo ? "checked" : ""} aria-label="Firma persona a cargo" /></td>
+      <td>${escapeHtml(item.operador || "-")}</td>
+      <td class="check-cell"><input type="checkbox" ${control.firmaOperador ? "checked" : ""} aria-label="Firma operador" /></td>
+      <td><span class="badge ${complete ? "" : "missing"}">${complete ? "Completo" : "Pendiente"}</span></td>
+    `;
+    const boxes = row.querySelectorAll("input[type='checkbox']");
+    boxes[0].addEventListener("change", () => updateSignature(item, { firmaPersonaACargo: boxes[0].checked }));
+    boxes[1].addEventListener("change", () => updateSignature(item, { firmaOperador: boxes[1].checked }));
+    container.appendChild(row);
+  });
 }
 
-async function loadGuardiasHoy() {
-  guardiasHoy = [];
+function updateSignature(row, patch) {
+  const id = signatureId(row);
+  state.signatureControl[id] = {
+    firmaPersonaACargo: toBool(row.firma_persona_a_cargo),
+    firmaOperador: toBool(row.firma_operador),
+    ...state.signatureControl[id],
+    ...patch,
+  };
+  const control = state.signatureControl[id];
+  const payload = {
+    action: "updateSignature",
+    control_id: row.control_id,
+    firma_persona_a_cargo: control.firmaPersonaACargo,
+    firma_operador: control.firmaOperador,
+    controlado: control.firmaPersonaACargo && control.firmaOperador,
+    controlado_en: new Date().toISOString(),
+    controlado_por: $("#responsibleSearch").value,
+  };
+  queueSignatureUpdate(payload);
+  sendSignatureUpdate(payload);
+  renderSignatures();
+  saveDraft();
+  updateProgress();
+}
+
+function renderSignatureSummary(rows) {
+  const missingA = rows.filter((row) => !(state.signatureControl[signatureId(row)]?.firmaPersonaACargo ?? toBool(row.firma_persona_a_cargo))).length;
+  const missingO = rows.filter((row) => !(state.signatureControl[signatureId(row)]?.firmaOperador ?? toBool(row.firma_operador))).length;
+  const pending = rows.filter((row) => {
+    const control = state.signatureControl[signatureId(row)] || {};
+    return !((control.firmaPersonaACargo ?? toBool(row.firma_persona_a_cargo)) && (control.firmaOperador ?? toBool(row.firma_operador)));
+  }).length;
+  $("#signatureSummary").innerHTML = `
+    <div class="metric"><strong>${pending}</strong><span>Partes pendientes</span></div>
+    <div class="metric"><strong>${missingA}</strong><span>Sin firma a cargo</span></div>
+    <div class="metric"><strong>${missingO}</strong><span>Sin firma operador</span></div>
+    <div class="metric"><strong>${getPendingSignatureUpdates().length}</strong><span>Actualizaciones pendientes</span></div>
+  `;
+}
+
+function queueSignatureUpdate(payload) {
+  const pending = getPendingSignatureUpdates().filter((item) => item.control_id !== payload.control_id);
+  pending.push(payload);
+  localStorage.setItem(STORAGE_KEYS.pendingSignatureUpdates, JSON.stringify(pending));
+}
+
+function getPendingSignatureUpdates() {
   try {
-    const rows = await fetchCsvRows(GUARDIAS_CSV_URL);
-    const todayVariants = getTodayVariants();
-    guardiasHoy = rows
-      .slice(1)
-      .filter(row => todayVariants.includes((row[0] || '').trim()))
-      .map(row => (row[1] || '').trim())
-      .filter(Boolean);
-    return true;
-  } catch (error) {
-    console.warn('No se pudieron cargar guardias del día.', error);
-    return false;
+    return JSON.parse(localStorage.getItem(STORAGE_KEYS.pendingSignatureUpdates) || "[]");
+  } catch {
+    return [];
   }
 }
 
-async function refreshAllData() {
-  reloadDataBtn.disabled = true;
-  reloadDataBtn.textContent = 'Actualizando...';
-  setStatus('Actualizando datos desde Google Sheets...', 'working');
-
-  await loadResponsables();
-  setupSearchableSelect(responsableSelect, responsables, responsableInput.value || responsables[0] || '');
-  await loadGuardiasHoy();
-  renderTables();
-
-  reloadDataBtn.disabled = false;
-  reloadDataBtn.textContent = 'Actualizar datos';
-  setStatus('Datos actualizados.', 'success');
+async function flushPendingSignatureUpdates() {
+  if (!CONFIG.appsScriptUrl) return;
+  const pending = getPendingSignatureUpdates();
+  for (const payload of pending) {
+    await sendSignatureUpdate(payload, false);
+  }
 }
 
-function collectSimpleTable(tableId) {
-  return [...document.querySelectorAll(`#${tableId} tbody tr`)].map(tr => ({
-    item: tr.children[0]?.textContent.trim() || '',
-    estado: tr.querySelector('select')?.value || ''
+async function sendSignatureUpdate(payload, showWarning = true) {
+  if (!CONFIG.appsScriptUrl) {
+    if (showWarning) setStatus("Firma guardada localmente: falta URL de Apps Script", "warn");
+    return;
+  }
+  try {
+    await fetch(CONFIG.appsScriptUrl, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload),
+    });
+    const pending = getPendingSignatureUpdates().filter((item) => item.control_id !== payload.control_id);
+    localStorage.setItem(STORAGE_KEYS.pendingSignatureUpdates, JSON.stringify(pending));
+    setStatus("Firma enviada a CONTROL_FIRMAS", "ok");
+  } catch (error) {
+    console.error(error);
+    if (showWarning) setStatus("No se pudo enviar la firma, queda pendiente", "warn");
+  }
+}
+
+function updateCounts() {
+  ["lugares", "moviles", "planillas", "choferes"].forEach((kind) => {
+    const done = state.checks[kind].filter((item) => item.condition).length;
+    const total = state.checks[kind].length;
+    $(`#${kind}Count`).textContent = `${done}/${total}`;
+  });
+}
+
+function updateProgress() {
+  updateCounts();
+  const allChecks = [...state.checks.lugares, ...state.checks.moviles];
+  const allAdminChecks = [...state.checks.planillas, ...state.checks.choferes];
+  const checkDone = allChecks.filter((item) => item.condition).length;
+  const adminDone = allAdminChecks.filter((item) => item.condition).length;
+  const signatureDone = state.signatures.filter((row) => {
+    const control = state.signatureControl[signatureId(row)] || {};
+    return (control.firmaPersonaACargo ?? toBool(row.firma_persona_a_cargo)) && (control.firmaOperador ?? toBool(row.firma_operador));
+  }).length;
+  const total = allChecks.length + allAdminChecks.length + state.signatures.length;
+  const done = checkDone + adminDone + signatureDone;
+  const percent = total ? Math.round((done / total) * 100) : 100;
+  $("#overallProgress").textContent = `${percent}% completo`;
+  $("#overallDetail").textContent = `${done} de ${total} items controlados.`;
+}
+
+function saveDraft() {
+  const payload = {
+    date: $("#controlDate").value,
+    responsible: $("#responsibleSearch").value,
+    checks: state.checks,
+    attendance: state.attendance,
+    signatureControl: state.signatureControl,
+    savedAt: new Date().toISOString(),
+  };
+  localStorage.setItem(STORAGE_KEYS.draft, JSON.stringify(payload));
+}
+
+function loadDraft() {
+  const raw = localStorage.getItem(STORAGE_KEYS.draft);
+  if (!raw) return;
+  try {
+    const draft = JSON.parse(raw);
+    $("#controlDate").value = draft.date || $("#controlDate").value;
+    if (draft.checks) state.checks = migrateChecks(draft.checks);
+    if (draft.attendance) state.attendance = migrateAttendance(draft.attendance);
+    if (draft.signatureControl) state.signatureControl = draft.signatureControl;
+    state.draftResponsible = draft.responsible || "";
+    $("#responsibleSearch").value = state.draftResponsible;
+  } catch (error) {
+    console.warn("No se pudo cargar el borrador", error);
+  }
+}
+
+function migrateChecks(checks) {
+  return {
+    lugares: migrateCheckGroup(checks.lugares, PLACE_ITEMS, "Bueno"),
+    moviles: migrateCheckGroup(checks.moviles, VEHICLE_ITEMS, "Bueno"),
+    planillas: migrateCheckGroup(checks.planillas, PLANILLA_ITEMS, "Completa"),
+    choferes: migrateCheckGroup(checks.choferes, DRIVER_CHECK_ITEMS, "Completa"),
+  };
+}
+
+function migrateCheckGroup(saved = [], sourceItems, defaultCondition) {
+  return sourceItems.map((name) => {
+    const previous = saved.find((item) => item.name === name);
+    return {
+      name,
+      condition: previous?.condition || statusToCondition(previous?.status) || defaultCondition,
+      note: previous?.note || "",
+    };
+  });
+}
+
+function migrateAttendance(attendance) {
+  return attendance.map((item) => ({
+    name: item.name || "",
+    guardia: item.guardia || item.status || "Presente",
+    limpieza: item.limpieza || "Realizo",
+    tasks: item.tasks || [],
+    note: item.note || "",
   }));
 }
 
-function rowHasAnyGuardiaData(row) {
-  return Boolean(
-    row.bombero || row.guardia || row.limpieza || row.actividad1 || row.actividad2
-  );
+function statusToCondition(status) {
+  if (status === "issue") return "Malo";
+  return "Bueno";
 }
 
-function collectGuardiaTable() {
-  return [...document.querySelectorAll('#guardiaTable tbody tr')]
-    .map(tr => ({
-      orden: tr.children[0]?.textContent.trim() || '',
-      bombero: tr.querySelector('.table-search-input')?.value.trim() || '',
-      guardia: tr.querySelector('[data-role="guardia"]')?.value || '',
-      limpieza: tr.querySelector('[data-role="limpieza"]')?.value || '',
-      actividad1: tr.children[4]?.querySelector('select')?.value || '',
-      actividad2: tr.children[5]?.querySelector('select')?.value || ''
-    }))
-    .filter(rowHasAnyGuardiaData)
-    .map((row, index) => ({ ...row, orden: String(index + 1) }));
-}
-
-function collectReportData() {
-  return {
-    fechaLabel: todayLabel.textContent.trim(),
-    fechaIso: getTodayIso(),
-    responsable: responsableInput.value.trim(),
-    moviles: collectSimpleTable('movilesTable'),
-    dependencias: collectSimpleTable('dependenciasTable'),
-    planillas: collectSimpleTable('planillasTable'),
-    choferes: collectSimpleTable('choferesTable'),
-    guardia: collectGuardiaTable()
-  };
-}
-
-function buildPdfFilename() {
-  return `reporte-guardia-${getTodayIso()}.pdf`;
-}
-
-async function loadImageAsDataUrl(srcCandidates) {
-  const candidates = Array.isArray(srcCandidates) ? srcCandidates : [srcCandidates];
-
-  for (const src of candidates) {
-    try {
-      const response = await fetch(src, { cache: 'no-store' });
-      if (!response.ok) continue;
-      const blob = await response.blob();
-      return await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
-    } catch (error) {
-      console.warn('No se pudo cargar el logo desde', src, error);
-    }
-  }
-
-  return null;
-}
-
-async function generatePdfBlob(reportData) {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 10;
-  const contentWidth = pageWidth - margin * 2;
-  const halfGap = 6;
-  const halfWidth = (contentWidth - halfGap) / 2;
-  const blue = [11, 44, 76];
-  const lightBlue = [245, 247, 250];
-  const line = [208, 214, 220];
-  const text = [35, 40, 46];
-  const muted = [102, 112, 122];
-
-  const logoDataUrl = await loadImageAsDataUrl(LOGO_CANDIDATES);
-
-  doc.setFillColor(...blue);
-  doc.roundedRect(margin, 10, contentWidth, 22, 3, 3, 'F');
-  if (logoDataUrl) doc.addImage(logoDataUrl, 'PNG', margin + 3, 12, 13, 13);
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  doc.text('REGISTRO DIARIO DE CUMPLIMIENTO', margin + 20, 15.8);
-  doc.setFontSize(17);
-  doc.text('REPORTE DE GUARDIA', margin + 20, 22.8);
-
-  doc.setFillColor(...lightBlue);
-  doc.setDrawColor(...line);
-  doc.roundedRect(margin, 36, halfWidth, 9.5, 2, 2, 'FD');
-  doc.roundedRect(margin + halfWidth + halfGap, 36, halfWidth, 9.5, 2, 2, 'FD');
-  doc.setTextColor(...muted);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.8);
-  doc.text('FECHA', margin + 3, 41.8);
-  doc.text('RESPONSABLE', margin + halfWidth + halfGap + 3, 41.8);
-  doc.setTextColor(...text);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9.6);
-  doc.text(reportData.fechaLabel || '—', margin + 17, 41.8);
-  doc.text(reportData.responsable || '—', margin + halfWidth + halfGap + 28, 41.8);
-
-  const headStyles = {
-    fillColor: blue,
-    textColor: 255,
-    fontStyle: 'bold',
-    lineColor: line,
-    lineWidth: 0.1,
-    fontSize: 8.6,
-    cellPadding: 1.6
-  };
-
-  const bodyStyles = {
-    textColor: text,
-    lineColor: line,
-    lineWidth: 0.1,
-    fontSize: 8.5,
-    cellPadding: 1.5,
-    valign: 'middle'
-  };
-
-  const drawSectionTitle = (label, x, y) => {
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...blue);
-    doc.setFontSize(10.2);
-    doc.text(label, x, y);
-  };
-
-  const baseTableConfig = {
-    theme: 'grid',
-    headStyles,
-    bodyStyles,
-    styles: { font: 'helvetica', overflow: 'linebreak' }
-  };
-
-  const topTablesY = 51;
-  drawSectionTitle('Control de acondicionamiento de los móviles', margin, 48);
-  doc.autoTable({
-    ...baseTableConfig,
-    startY: topTablesY,
-    margin: { left: margin },
-    tableWidth: halfWidth,
-    head: [['Móvil', 'Estado']],
-    body: reportData.moviles.map(r => [r.item, r.estado || '—']),
-    columnStyles: { 0: { cellWidth: halfWidth - 28 }, 1: { cellWidth: 28 } }
-  });
-  const movilesBottom = doc.lastAutoTable.finalY;
-
-  drawSectionTitle('Control de dependencias', margin + halfWidth + halfGap, 48);
-  doc.autoTable({
-    ...baseTableConfig,
-    startY: topTablesY,
-    margin: { left: margin + halfWidth + halfGap },
-    tableWidth: halfWidth,
-    head: [['Dependencia', 'Estado']],
-    body: reportData.dependencias.map(r => [r.item, r.estado || '—']),
-    columnStyles: { 0: { cellWidth: halfWidth - 28 }, 1: { cellWidth: 28 } }
-  });
-  const dependBottom = doc.lastAutoTable.finalY;
-
-  let nextY = Math.max(movilesBottom, dependBottom) + 9;
-
-  drawSectionTitle('Control de planillas', margin, nextY);
-  doc.autoTable({
-    ...baseTableConfig,
-    startY: nextY + 2,
-    margin: { left: margin },
-    tableWidth: halfWidth,
-    head: [['Planilla', 'Estado']],
-    body: reportData.planillas.map(r => [r.item, r.estado || '—']),
-    columnStyles: { 0: { cellWidth: halfWidth - 28 }, 1: { cellWidth: 28 } }
-  });
-  const planillasBottom = doc.lastAutoTable.finalY;
-
-  drawSectionTitle('Check de choferes', margin + halfWidth + halfGap, nextY);
-  doc.autoTable({
-    ...baseTableConfig,
-    startY: nextY + 2,
-    margin: { left: margin + halfWidth + halfGap },
-    tableWidth: halfWidth,
-    head: [['Control', 'Estado']],
-    body: reportData.choferes.map(r => [r.item, r.estado || '—']),
-    columnStyles: { 0: { cellWidth: halfWidth - 28 }, 1: { cellWidth: 28 } }
-  });
-  const choferesBottom = doc.lastAutoTable.finalY;
-
-  let guardiaY = Math.max(planillasBottom, choferesBottom) + 10;
-  const guardiaBody = (reportData.guardia.length ? reportData.guardia : []).map(r => [
-    r.orden,
-    r.bombero || '—',
-    r.guardia || '—',
-    r.limpieza || '—',
-    r.actividad1 || '—',
-    r.actividad2 || '—'
-  ]);
-
-  if (guardiaY > 245) {
-    doc.addPage();
-    guardiaY = 14;
-  }
-
-  drawSectionTitle('Reporte de guardia', margin, guardiaY);
-  doc.autoTable({
-    ...baseTableConfig,
-    startY: guardiaY + 2,
-    margin: { left: margin, right: margin },
-    tableWidth: contentWidth,
-    head: [['#', 'Bombero', 'Guardia', 'Limpieza', 'Actividad 1', 'Actividad 2']],
-    body: guardiaBody.length ? guardiaBody : [['', '—', '—', '—', '—', '—']],
-    columnStyles: {
-      0: { cellWidth: 8, halign: 'center' },
-      1: { cellWidth: 49 },
-      2: { cellWidth: 22 },
-      3: { cellWidth: 22 },
-      4: { cellWidth: 44 },
-      5: { cellWidth: 44 }
-    },
-    didDrawPage: () => {
-      const str = `Página ${doc.getNumberOfPages()}`;
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor(...muted);
-      doc.text(str, pageWidth - margin, pageHeight - 6, { align: 'right' });
-    }
-  });
-
-  return doc.output('blob');
-}
-
-function blobToBase64(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const result = String(reader.result || '');
-      resolve(result.split(',')[1] || '');
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-}
-
-async function downloadPdf() {
-  const originalText = downloadPdfBtn.textContent;
-  downloadPdfBtn.disabled = true;
-  downloadPdfBtn.textContent = 'Generando PDF...';
-  setStatus('Generando PDF profesional...', 'working');
-
-  try {
-    const reportData = collectReportData();
-    const blob = await generatePdfBlob(reportData);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = buildPdfFilename();
-    a.click();
-    URL.revokeObjectURL(url);
-    setStatus('PDF generado correctamente.', 'success');
-  } catch (error) {
-    console.error(error);
-    setStatus('No se pudo generar el PDF.', 'error');
-    alert('No se pudo generar el PDF. Revisá la consola del navegador.');
-  } finally {
-    downloadPdfBtn.disabled = false;
-    downloadPdfBtn.textContent = originalText;
-  }
-}
-
-async function saveToDrive() {
-  if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.includes('PEGAR_AQUI')) {
-    alert('Primero configurá la URL del Web App de Apps Script en app.js');
+async function finishControl() {
+  const responsible = $("#responsibleSearch").value.trim();
+  if (!responsible) {
+    setStatus("Falta seleccionar responsable", "warn");
+    $("#responsibleSearch").focus();
     return;
   }
+  saveDraft();
+  const record = buildRecord();
+  const pdfBlob = generatePdf(record);
+  saveHistory(record);
+  renderHistory();
+  state.signatures = state.signatures.filter((row) => {
+    const control = state.signatureControl[signatureId(row)] || {};
+    return !((control.firmaPersonaACargo ?? toBool(row.firma_persona_a_cargo)) && (control.firmaOperador ?? toBool(row.firma_operador)));
+  });
+  renderSignatures();
+  localStorage.removeItem(STORAGE_KEYS.draft);
+  setStatus("PDF generado y control archivado", "ok");
+  await shareOrDownload(pdfBlob, record);
+}
 
-  const originalText = saveDriveBtn.textContent;
-  saveDriveBtn.disabled = true;
-  saveDriveBtn.textContent = 'Guardando...';
-  setStatus('Generando PDF y enviando a Drive...', 'working');
+function buildRecord() {
+  return {
+    id: crypto.randomUUID(),
+    date: $("#controlDate").value,
+    responsible: $("#responsibleSearch").value.trim(),
+    createdAt: new Date().toISOString(),
+    checks: JSON.parse(JSON.stringify(state.checks)),
+    attendance: JSON.parse(JSON.stringify(state.attendance)),
+    signatures: state.signatures.map((row) => {
+      const control = state.signatureControl[signatureId(row)] || {};
+      return {
+        parte: row.parte_servicio,
+        fecha: row.fecha_servicio,
+        aCargo: row.persona_a_cargo,
+        operador: row.operador,
+        firmaACargo: control.firmaPersonaACargo ?? toBool(row.firma_persona_a_cargo),
+        firmaOperador: control.firmaOperador ?? toBool(row.firma_operador),
+      };
+    }),
+  };
+}
 
-  try {
-    const reportData = collectReportData();
-    const blob = await generatePdfBlob(reportData);
-    const pdfBase64 = await blobToBase64(blob);
+function generatePdf(record) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  let y = 16;
+  const margin = 14;
+  const width = 182;
 
-    await fetch(APPS_SCRIPT_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({
-        fileName: buildPdfFilename(),
-        pdfBase64,
-        reportData
-      })
+  const section = (title) => {
+    if (y > 260) {
+      doc.addPage();
+      y = 16;
+    }
+    doc.setFillColor(181, 31, 45);
+    doc.rect(margin, y, width, 8, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text(title, margin + 3, y + 5.5);
+    y += 13;
+    doc.setTextColor(24, 32, 42);
+  };
+
+  const line = (text, indent = 0) => {
+    const chunks = doc.splitTextToSize(text, width - indent);
+    chunks.forEach((chunk) => {
+      if (y > 282) {
+        doc.addPage();
+        y = 16;
+      }
+      doc.text(chunk, margin + indent, y);
+      y += 5.2;
     });
+  };
 
-    setStatus('Reporte enviado. Verificá Drive y la hoja Historial.', 'success');
-  } catch (error) {
-    console.error(error);
-    setStatus('No se pudo enviar el reporte a Drive.', 'error');
-    alert('No se pudo enviar el reporte. Revisá la consola del navegador.');
-  } finally {
-    saveDriveBtn.disabled = false;
-    saveDriveBtn.textContent = originalText;
+  doc.setTextColor(24, 32, 42);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(18);
+  doc.text("SBVP - Control Diario", margin, y);
+  y += 8;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  line(`Fecha: ${record.date} | Responsable: ${record.responsible}`);
+  line(`Generado: ${new Date(record.createdAt).toLocaleString("es-AR")}`);
+  y += 3;
+
+  section("Limpieza de lugares");
+  record.checks.lugares.forEach((item) => line(`${item.name}: ${item.condition}${item.note ? ` - ${item.note}` : ""}`));
+
+  section("Limpieza de moviles");
+  record.checks.moviles.forEach((item) => line(`${item.name}: ${item.condition}${item.note ? ` - ${item.note}` : ""}`));
+
+  section("Control de planillas");
+  record.checks.planillas.forEach((item) => line(`${item.name}: ${item.condition}${item.note ? ` - ${item.note}` : ""}`));
+
+  section("Check de choferes");
+  record.checks.choferes.forEach((item) => line(`${item.name}: ${item.condition}${item.note ? ` - ${item.note}` : ""}`));
+
+  section("Asistencia");
+  if (!record.attendance.length) line("Sin personas cargadas.");
+  record.attendance.forEach((item) => {
+    const tasks = item.tasks?.length ? item.tasks.join(", ") : "Sin tareas";
+    line(`${item.name || "Sin nombre"} | Guardia: ${item.guardia} | Limpieza: ${item.limpieza} | Tareas: ${tasks}${item.note ? ` - ${item.note}` : ""}`);
+  });
+
+  section("Control de partes sin firmar");
+  const pending = record.signatures.filter((item) => !(item.firmaACargo && item.firmaOperador));
+  if (!pending.length) line("Sin partes pendientes en CONTROL_FIRMAS.");
+  pending.forEach((item) => {
+    line(`Parte ${item.parte || "-"} (${item.fecha || "sin fecha"})`);
+    line(`A cargo: ${item.aCargo || "-"} | Firma: ${item.firmaACargo ? "Si" : "No"}`, 4);
+    line(`Operador: ${item.operador || "-"} | Firma: ${item.firmaOperador ? "Si" : "No"}`, 4);
+    y += 1.5;
+  });
+
+  const pages = doc.getNumberOfPages();
+  for (let page = 1; page <= pages; page += 1) {
+    doc.setPage(page);
+    doc.setFontSize(9);
+    doc.setTextColor(101, 112, 128);
+    doc.text(`Pagina ${page} de ${pages}`, 166, 290);
+  }
+  return doc.output("blob");
+}
+
+async function shareOrDownload(blob, record) {
+  const fileName = `SBVP-control-diario-${record.date}.pdf`;
+  const file = new File([blob], fileName, { type: "application/pdf" });
+  if (navigator.canShare?.({ files: [file] })) {
+    await navigator.share({
+      title: "SBVP Control Diario",
+      text: `Control diario ${record.date} - ${record.responsible}`,
+      files: [file],
+    });
+    return;
+  }
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(url);
+  const message = encodeURIComponent(`Control diario ${record.date} generado. Archivo: ${fileName}`);
+  window.open(`https://wa.me/?text=${message}`, "_blank", "noopener");
+}
+
+function saveHistory(record) {
+  const history = getHistory();
+  history.unshift(record);
+  localStorage.setItem(STORAGE_KEYS.history, JSON.stringify(history));
+  pruneHistory();
+}
+
+function getHistory() {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEYS.history) || "[]");
+  } catch {
+    return [];
   }
 }
 
-reloadDataBtn.addEventListener('click', refreshAllData);
-downloadPdfBtn.addEventListener('click', downloadPdf);
-saveDriveBtn.addEventListener('click', saveToDrive);
+function pruneHistory() {
+  const cutoff = Date.now() - CONFIG.historyDays * 24 * 60 * 60 * 1000;
+  const filtered = getHistory().filter((item) => new Date(item.createdAt).getTime() >= cutoff);
+  localStorage.setItem(STORAGE_KEYS.history, JSON.stringify(filtered));
+}
 
-formatTodayDisplay();
-setupSearchableSelect(responsableSelect, responsables, responsableInput.value || responsables[0] || '');
-refreshAllData();
+function renderHistory() {
+  const rows = getHistory();
+  const container = $("#historyRows");
+  if (!rows.length) {
+    container.innerHTML = `<div class="empty-state">Todavia no hay controles finalizados.</div>`;
+    return;
+  }
+  container.innerHTML = "";
+  rows.forEach((item) => {
+    const checked = [...item.checks.lugares, ...item.checks.moviles, ...item.checks.planillas, ...item.checks.choferes].filter((row) => row.condition).length;
+    const pending = item.signatures.filter((row) => !(row.firmaACargo && row.firmaOperador)).length;
+    const row = document.createElement("article");
+    row.className = "history-row";
+    row.innerHTML = `
+      <strong>${escapeHtml(item.date)} - ${escapeHtml(item.responsible)}</strong>
+      <span>Limpieza: ${checked} items | Partes pendientes: ${pending}</span>
+    `;
+    container.appendChild(row);
+  });
+}
+
+function isCompleteSignatureRow(row) {
+  return toBool(row.firma_persona_a_cargo) && toBool(row.firma_operador);
+}
+
+function signatureId(row) {
+  return row.control_id || `${row.servicio_id}-${row.parte_servicio}`;
+}
+
+function toBool(value) {
+  return value === true || String(value).toUpperCase() === "TRUE" || String(value).toLowerCase() === "si";
+}
+
+function setStatus(text, kind) {
+  const el = $("#syncStatus");
+  el.textContent = text;
+  el.className = `status-pill ${kind || ""}`.trim();
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  })[char]);
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value).replace(/`/g, "&#96;");
+}
