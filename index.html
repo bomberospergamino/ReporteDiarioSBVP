@@ -1,152 +1,207 @@
 <!doctype html>
 <html lang="es">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Reporte de guardia</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css" />
-  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
-</head>
-<body>
-  <div class="app-shell">
-    <header class="hero-card">
-      <div class="hero-brand">
-        <img src="./logo-sbvp.png" alt="Logo Bomberos Voluntarios Pergamino" class="hero-logo" onerror="this.onerror=null;this.src='./logo%20SBVP.png';" />
-        <div>
-          <p class="eyebrow">Registro diario de cumplimiento</p>
-          <h1>Reporte de guardia</h1>
-          <p class="hero-subtitle">Diseñado para uso rápido desde celular y PDF institucional.</p>
-        </div>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SBVP Control Diario</title>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <button class="history-top-button" id="openHistoryTop" type="button">Historico</button>
+      <div>
+        <p class="kicker">SBVP</p>
+        <h1>Control Diario</h1>
       </div>
-
-      <div class="hero-meta-row">
-        <div class="meta-inline">
-          <span class="meta-label">Fecha</span>
-          <span class="meta-value" id="todayLabel"></span>
-        </div>
-        <div class="meta-inline meta-inline-input">
-          <label class="meta-label" for="responsableInput">Responsable</label>
-          <div class="searchable-select" id="responsableSelect">
-            <div class="searchable-control">
-              <span class="search-icon">🔎</span>
-              <input id="responsableInput" type="text" placeholder="Buscar responsable" autocomplete="off" />
-              <button class="search-toggle" type="button" aria-label="Mostrar opciones">▾</button>
-            </div>
-            <div class="searchable-menu" id="responsableMenu"></div>
-          </div>
-        </div>
-      </div>
+      <div class="status-pill" id="syncStatus">Conectando con planilla...</div>
     </header>
 
-    <main id="reportContent">
-      <section class="duo-grid compact-grid">
-        <section class="section-card half-card compact-card">
-          <div class="section-head section-head-compact">
-            <h2>Control de acondicionamiento de los móviles</h2>
-          </div>
-          <div class="table-wrap no-break full-width-wrap">
-            <table class="report-table report-table-compact" id="movilesTable">
-              <thead>
-                <tr><th>Móvil</th><th>Estado</th></tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
-        </section>
-
-        <section class="section-card half-card compact-card">
-          <div class="section-head section-head-compact">
-            <h2>Control de dependencias</h2>
-          </div>
-          <div class="table-wrap no-break full-width-wrap">
-            <table class="report-table report-table-compact" id="dependenciasTable">
-              <thead>
-                <tr><th>Dependencia</th><th>Estado</th></tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
-        </section>
-      </section>
-
-      <section class="section-card compact-card">
-        <div class="section-head section-head-compact"><h2>Control documental</h2></div>
-        <div class="planillas-grid">
-          <div>
-            <div class="subsection-title">Control de planillas</div>
-            <div class="table-wrap no-break full-width-wrap">
-              <table class="report-table report-table-compact" id="planillasTable">
-                <thead><tr><th>Planilla</th><th>Estado</th></tr></thead>
-                <tbody></tbody>
-              </table>
-            </div>
-          </div>
-
-          <div>
-            <div class="subsection-title">Check de choferes</div>
-            <div class="table-wrap no-break full-width-wrap">
-              <table class="report-table report-table-compact" id="choferesTable">
-                <thead><tr><th>Control</th><th>Estado</th></tr></thead>
-                <tbody></tbody>
-              </table>
-            </div>
-          </div>
+    <main class="shell">
+      <section class="identity-panel" aria-labelledby="identityTitle">
+        <div>
+          <h2 id="identityTitle">Responsable del control</h2>
+        </div>
+        <div class="field-grid">
+          <label>
+            Fecha
+            <input id="controlDate" type="date" />
+          </label>
+          <label class="wide">
+            Quien controla
+            <select id="responsibleSearch">
+              <option value="">Cargando personal...</option>
+            </select>
+            <datalist id="personnelList"></datalist>
+          </label>
         </div>
       </section>
 
-      <section class="section-card compact-card">
-        <div class="section-head section-head-compact guardia-head">
-          <div>
-            <h2>Reporte de guardia</h2>
-            <p class="section-note">Las filas sin datos no se incluirán en el PDF final.</p>
-          </div>
-          <p class="section-note section-note-right">La tabla de bomberos puede desplazarse hacia la derecha en celular.</p>
+      <nav class="tabs" aria-label="Secciones del control">
+        <button class="tab active" data-tab="lugares">Lugares</button>
+        <button class="tab" data-tab="moviles">Moviles</button>
+        <button class="tab" data-tab="planillas">Planillas firmadas</button>
+        <button class="tab" data-tab="choferes">Choferes</button>
+        <button class="tab" data-tab="asistencia">Asistencia</button>
+        <button class="tab" data-tab="firmas">Partes sin firmar</button>
+      </nav>
+
+      <section class="tab-panel active" id="tab-lugares">
+        <div class="section-head">
+          <h2>Limpieza de lugares</h2>
+          <span id="lugaresCount" class="mini-count">0/0</span>
         </div>
-        <div class="table-wrap no-break guardia-scroll">
-          <table class="report-table report-table-lg report-table-guardia" id="guardiaTable">
-            <colgroup>
-              <col style="width:5%"><col style="width:27%"><col style="width:12%"><col style="width:12%"><col style="width:22%"><col style="width:22%">
-            </colgroup>
+        <div class="table-wrap">
+          <table class="data-table">
             <thead>
               <tr>
-                <th>#</th>
-                <th>Bombero</th>
-                <th>Guardia</th>
-                <th>Limpieza</th>
-                <th>Actividad 1</th>
-                <th>Actividad 2</th>
+                <th>Lugar</th>
+                <th>Condicion</th>
+                <th>Observacion</th>
               </tr>
             </thead>
-            <tbody></tbody>
+            <tbody id="placeChecks"></tbody>
           </table>
         </div>
       </section>
+
+      <section class="tab-panel" id="tab-moviles">
+        <div class="section-head">
+          <h2>Limpieza de moviles</h2>
+          <span id="movilesCount" class="mini-count">0/0</span>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Movil</th>
+                <th>Condicion</th>
+                <th>Observacion</th>
+              </tr>
+            </thead>
+            <tbody id="vehicleChecks"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="tab-planillas">
+        <div class="section-head">
+          <h2>Planillas firmadas</h2>
+          <span id="planillasCount" class="mini-count">0/0</span>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Planilla</th>
+                <th>Estado</th>
+                <th>Observacion</th>
+              </tr>
+            </thead>
+            <tbody id="sheetChecks"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="tab-choferes">
+        <div class="section-head">
+          <h2>Check de choferes</h2>
+          <span id="choferesCount" class="mini-count">0/0</span>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Control</th>
+                <th>Estado</th>
+                <th>Observacion</th>
+              </tr>
+            </thead>
+            <tbody id="driverChecks"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="tab-asistencia">
+        <div class="section-head">
+          <div>
+            <h2>Asistencia de personas</h2>
+            <p class="subcopy">Indica cuantas personas vas a cargar y completa cada fila.</p>
+          </div>
+          <div class="attendance-tools">
+            <label>
+              Cantidad
+              <input id="attendanceAmount" type="number" min="0" max="80" value="0" />
+            </label>
+            <button class="ghost-button" id="setAttendanceAmount" type="button">Generar</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table attendance-table">
+            <thead>
+              <tr>
+                <th>Persona</th>
+                <th>Guardia</th>
+                <th>Limpieza</th>
+                <th>Tareas</th>
+                <th>Observacion</th>
+              </tr>
+            </thead>
+            <tbody id="attendanceRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="tab-firmas">
+        <div class="section-head">
+          <div>
+            <h2>Control de partes sin firmar</h2>
+            <p class="subcopy">Datos leidos desde la hoja CONTROL_FIRMAS.</p>
+          </div>
+        </div>
+        <div class="signature-summary" id="signatureSummary"></div>
+        <div class="table-wrap">
+          <table class="data-table signature-table">
+            <thead>
+              <tr>
+                <th>Parte</th>
+                <th>Fecha</th>
+                <th>Persona a cargo</th>
+                <th>Firma a cargo</th>
+                <th>Operador</th>
+                <th>Firma operador</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody id="signatureRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="tab-historico">
+        <div class="section-head">
+          <div>
+            <h2>Historico local</h2>
+            <p class="subcopy">Se conserva durante 60 dias en este navegador.</p>
+          </div>
+          <button class="ghost-button danger" id="clearHistory" type="button">Limpiar</button>
+        </div>
+        <div class="history-list" id="historyRows"></div>
+      </section>
     </main>
 
-    <footer class="actions-bar">
-      <button id="reloadDataBtn" class="btn btn-secondary" type="button">Actualizar datos</button>
-      <button id="downloadPdfBtn" class="btn btn-primary" type="button">Descargar PDF</button>
-      <button id="saveDriveBtn" class="btn btn-primary btn-drive" type="button">Guardar en Drive</button>
+    <footer class="actionbar">
+      <div class="progress-block">
+        <strong id="overallProgress">0% completo</strong>
+        <span id="overallDetail">Completa los controles para finalizar.</span>
+      </div>
+      <div class="action-buttons">
+        <button id="saveDraft" class="secondary-button" type="button">Guardar borrador</button>
+        <button id="finishControl" class="primary-button" type="button">Finalizar y generar PDF</button>
+      </div>
     </footer>
 
-    <div class="status-bar" id="statusBar">Listo.</div>
-  </div>
-
-  <template id="searchInputTemplate">
-    <div class="searchable-select searchable-select-table">
-      <div class="searchable-control">
-        <span class="search-icon">🔎</span>
-        <input class="table-search-input" type="text" placeholder="Buscar bombero" autocomplete="off" />
-        <button class="search-toggle" type="button" aria-label="Mostrar opciones">▾</button>
-      </div>
-      <div class="searchable-menu"></div>
-    </div>
-  </template>
-
-  <script src="app.js"></script>
-</body>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <script src="./app.js"></script>
+  </body>
 </html>
